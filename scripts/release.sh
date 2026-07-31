@@ -64,9 +64,9 @@ OWNER="Chegolin123"
 REPO="helper-android"
 
 echo "==> Создание Release v$VERSION..."
-# JSON через файл, чтобы избежать проблем с кавычками/кодировкой в bash на Windows.
-RELEASE_PAYLOAD="$ROOT/.release_payload.json"
-python -c "import json; open(r'$RELEASE_PAYLOAD','w',encoding='utf-8').write(json.dumps({'tag_name':'v$VERSION','name':'Helper v$VERSION','body':'Релиз v$VERSION. Обновление доступно из приложения.','prerelease':False}, ensure_ascii=False))"
+# JSON через файл (относительный путь — надёжнее на Windows с Git Bash).
+RELEASE_PAYLOAD=".release_payload.json"
+python -c "import json,os; os.chdir(os.environ.get('PWD','.')); open('.release_payload.json','w',encoding='utf-8').write(json.dumps({'tag_name':'v$VERSION','name':'Helper v$VERSION','body':'Релиз v$VERSION. Обновление доступно из приложения.','prerelease':False}, ensure_ascii=False))"
 RELEASE_RESP=$(curl -s -X POST -H "Authorization: token $TOKEN" -H "Content-Type: application/json" \
   --data-binary @"$RELEASE_PAYLOAD" \
   "https://api.github.com/repos/$OWNER/$REPO/releases")
