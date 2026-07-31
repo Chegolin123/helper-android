@@ -1,0 +1,7 @@
+<resources>
+    <!-- Базовая тема для Activity. Сам UI рисуется в Compose (HelperTheme),
+         здесь нужен только NoActionBar + фон на время холодного старта. -->
+    <style name="AppTheme" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+</resources>

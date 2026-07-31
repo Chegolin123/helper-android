@@ -1,0 +1,21 @@
+# Build
+*.iml
+.gradle/
+build/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+
+# IDE
+.idea/
+*.swp
+.DS_Store
+
+# Секреты (DeepSeek-ключ живёт в local.properties — он уже игнорится выше)
+*.keystore
+*.jks
+keystore.properties
+
+# Kotlin
+.kotlin/
