@@ -25,8 +25,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.helper.app.data.model.ChatMessage
-import com.helper.app.ui.theme.BubbleAssistant
-import com.helper.app.ui.theme.BubbleUser
 
 private val BubbleShape = RoundedCornerShape(18.dp)
 
@@ -41,8 +39,13 @@ fun MessageBubble(
     val context = LocalContext.current
     val isUser = message.isUser
     val alignment = if (isUser) Arrangement.End else Arrangement.Start
-    val bubbleColor = if (isUser) BubbleUser else BubbleAssistant
-    val onColor = if (isUser) androidx.compose.ui.graphics.Color.White else MaterialTheme.colorScheme.onSurface
+    // Цвета берём из темы (semantic), а не hardcoded — иначе в светлой теме
+    // ассистент получал чёрный текст по чёрному фону. Semantic-пары всегда
+    // контрастны друг с другом по спецификации Material 3.
+    val bubbleColor = if (isUser) MaterialTheme.colorScheme.primary
+    else MaterialTheme.colorScheme.surfaceVariant
+    val onColor = if (isUser) MaterialTheme.colorScheme.onPrimary
+    else MaterialTheme.colorScheme.onSurfaceVariant
     val roleLabel = if (isUser) "Вы" else "Саша"
 
     Column(
