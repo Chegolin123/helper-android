@@ -52,6 +52,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.helper.app.data.update.UpdateCheckResult
+import com.helper.app.data.update.UpdateChecker
 import com.helper.app.ui.chat.components.DayDivider
 import com.helper.app.ui.chat.components.EmptyState
 import com.helper.app.ui.chat.components.MessageBubble
@@ -74,6 +76,17 @@ fun ChatScreen() {
     val snackbar = remember { SnackbarHostState() }
     var showClearDialog by remember { mutableStateOf(false) }
 
+    // Проверка обновления при старте (один раз).
+    val updateChecker = remember { UpdateChecker() }
+    var update by remember { mutableStateOf<UpdateCheckResult?>(null) }
+    var updateRequested by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (!updateRequested) {
+            updateRequested = true
+            update = updateChecker.check()
+        }
+    }
+
     // Показываем ошибку как снекбар с действием «Повторить».
     LaunchedEffect(state.lastError) {
         val err = state.lastError ?: return@LaunchedEffect
@@ -88,9 +101,9 @@ fun ChatScreen() {
     }
 
     // Авто-скролл к последнему сообщению.
-    LaunchedEffect(state.messages.size, state.isLoading) {
-        if (state.messages.isNotEmpty()) {
-            listState.animateScrollToItem(state.messages.size - 1)
+    LaunchedEffect(state.items.size, state.isLoading) {
+        if (state.items.isNotEmpty()) {
+            listState.animateScrollToItem(state.items.size - 1)
         }
     }
 
@@ -195,6 +208,15 @@ fun ChatScreen() {
             dismissButton = {
                 TextButton(onClick = { showClearDialog = false }) { Text("Отмена") }
             },
+        )
+    }
+
+    // Диалог самообновления, если нашли свежий релиз.
+    val available = update as? UpdateCheckResult.Available
+    if (available != null) {
+        UpdateDialog(
+            state = available,
+            onDismiss = { update = null },
         )
     }
 }

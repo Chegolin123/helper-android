@@ -23,7 +23,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.helper.app.data.model.ChatMessage
 import com.helper.app.ui.theme.BubbleAssistant
@@ -94,18 +93,20 @@ fun MessageBubble(
         // Таймстамп показываем только при группировке (первые в группе / смена автора/времени).
         if (showTime) {
             Spacer(Modifier.padding(top = 3.dp))
-            Text(
-                text = timeLabel,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = if (isUser) TextAlign.End else TextAlign.Start,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
+            ) {
+                Text(
+                    text = timeLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(
                         start = if (isUser) 0.dp else 36.dp,
                         end = if (isUser) 4.dp else 0.dp,
                     ),
-            )
+                )
+            }
         }
     }
 }

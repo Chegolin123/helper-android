@@ -218,9 +218,11 @@ private fun CodeBlock(content: String, color: Color) {
 
 @Composable
 private fun BulletRow(marker: String, content: String, color: Color) {
+    // Буллит «•» — с отступом в два пробела; нумерованный «1.» — один пробел.
+    val label = if (marker == "•") "$marker  " else "$marker "
     Row {
         Text(
-            text = "$marker  ",
+            text = label,
             color = MaterialTheme.colorScheme.primary,
             style = MaterialTheme.typography.bodyMedium,
         )
