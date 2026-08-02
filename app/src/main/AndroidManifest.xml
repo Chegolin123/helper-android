@@ -4,6 +4,18 @@
     <!-- Для self-update: запуск системного установщика APK. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!-- Фича 2: геолокация (coarse достаточно для «где я»). -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Фича 5: голосовой ввод. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Фичи 1 и 6: точные будильники (напоминания, утреннее резюме). -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- Фичи 1 и 6: уведомления (Android 13+). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Фичи 1 и 6: перепланирование после перезагрузки телефона. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -33,5 +45,22 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- Фича 1: приём срабатывания напоминания. -->
+        <receiver
+            android:name=".scheduling.ReminderReceiver"
+            android:exported="false" />
+        <!-- Фича 6: приём срабатывания утреннего резюме. -->
+        <receiver
+            android:name=".scheduling.DailySummaryReceiver"
+            android:exported="false" />
+        <!-- Фичи 1 и 6: восстановление таймеров после перезагрузки телефона. -->
+        <receiver
+            android:name=".scheduling.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

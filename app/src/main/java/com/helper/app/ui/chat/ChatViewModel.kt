@@ -17,8 +17,10 @@ import kotlinx.coroutines.launch
 data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
     val isLoading: Boolean = false,
+    val isStreaming: Boolean = false,
     val lastError: String? = null,
     val input: String = "",
+    val streamEnabled: Boolean = true,
 ) {
     /** Готовый плоский список с разделителями дат и пометками таймстампов. */
     val items: List<ChatItem> get() = buildChatItems(messages)
@@ -27,8 +29,7 @@ data class ChatUiState(
 }
 
 /**
- * Управляет логикой чата: отправка, сохранение истории, очистка.
- * Не зависит от UI — тестируется отдельно.
+ * Управляет логикой чата: отправка, стриминг, серверный контекст, очистка.
  */
 class ChatViewModel(
     private val repo: ChatRepository,
@@ -37,14 +38,24 @@ class ChatViewModel(
     private val _ui = MutableStateFlow(ChatUiState(messages = repo.loadHistory()))
     val ui: StateFlow<ChatUiState> = _ui.asStateFlow()
 
+    /** Серверная сессия (фича 4). Лениво создаём при первом запросе. */
+    private var sessionId: String? = null
+    private var sessionInitStarted = false
+
+    private val streamEnabled = true
+
     fun onInputChange(text: String) {
         _ui.update { it.copy(input = text) }
     }
 
-    /** Отправить текущий ввод в API. */
+    fun toggleStream() {
+        _ui.update { it.copy(streamEnabled = !it.streamEnabled) }
+    }
+
+    /** Отправить текущий ввод в API (со стримингом или без). */
     fun send() {
         val text = _ui.value.input.trim()
-        if (text.isEmpty() || _ui.value.isLoading) return
+        if (text.isEmpty() || _ui.value.isLoading || _ui.value.isStreaming) return
 
         val userMsg = ChatMessage.user(text)
         val updated = _ui.value.messages + userMsg
@@ -52,48 +63,110 @@ class ChatViewModel(
         persist(updated)
 
         viewModelScope.launch {
-            when (val res = repo.ask(updated)) {
-                is ApiResult.Success -> {
-                    val reply = ChatMessage.assistant(res.content)
-                    val withReply = _ui.value.messages + reply
-                    _ui.update { it.copy(messages = withReply, isLoading = false) }
-                    persist(withReply)
+            // Гарантируем наличие серверной сессии.
+            ensureSession()
+
+            if (_ui.value.streamEnabled) {
+                // Фича 3: стриминг — сразу добавляем пустой assistant-пузырь и растим его.
+                val replyId = "a-stream-${System.currentTimeMillis()}"
+                _ui.update { it.copy(messages = it.messages + ChatMessage.assistant("", 0).copy(id = replyId), isStreaming = true) }
+                val sb = StringBuilder()
+                repo.askStream(updated, sessionId).collect { delta ->
+                    sb.append(delta)
+                    _ui.update { st ->
+                        val msgs = st.messages.map {
+                            if (it.id == replyId) it.copy(content = sb.toString(), timestamp = System.currentTimeMillis())
+                            else it
+                        }
+                        st.copy(messages = msgs)
+                    }
                 }
-                is ApiResult.Error -> {
-                    _ui.update { it.copy(isLoading = false, lastError = res.message) }
+                val finalText = sb.toString()
+                if (finalText.startsWith("[Ошибка") || finalText.startsWith("[Ошибк")) {
+                    _ui.update { it.copy(isStreaming = false, isLoading = false, lastError = finalText) }
+                } else {
+                    val finalMsg = ChatMessage.assistant(finalText)
+                    _ui.update { it.copy(
+                        messages = it.messages.map { m -> if (m.id == replyId) finalMsg else m },
+                        isStreaming = false, isLoading = false,
+                    ) }
+                    persist(_ui.value.messages)
+                }
+            } else {
+                when (val res = repo.ask(updated, sessionId)) {
+                    is ApiResult.Success -> {
+                        val reply = ChatMessage.assistant(res.content)
+                        val withReply = _ui.value.messages + reply
+                        _ui.update { it.copy(messages = withReply, isLoading = false) }
+                        persist(withReply)
+                    }
+                    is ApiResult.Error -> {
+                        _ui.update { it.copy(isLoading = false, lastError = res.message) }
+                    }
                 }
             }
         }
     }
 
-    /** Очистить весь диалог (с подтверждением в UI). */
+    /** Очистить диалог: локально + серверную сессию. */
     fun clearChat() {
+        val sid = sessionId
+        if (sid != null) {
+            viewModelScope.launch { repo.clearSession(sid) }
+        }
+        sessionId = null
+        sessionInitStarted = false
         repo.clear()
         _ui.update { it.copy(messages = emptyList(), lastError = null) }
     }
 
-    /**
-     * Повторить запрос после ошибки. User-сообщение уже в истории, поэтому НЕ
-     * добавляем дубль — просто заново шлём историю в API.
-     */
+    /** Повторить после ошибки (user уже в истории, без дубля). */
     fun retry() {
         val current = _ui.value
-        if (current.isLoading) return
+        if (current.isLoading || current.isStreaming) return
         if (current.messages.lastOrNull { it.isUser } == null) return
         _ui.update { it.copy(isLoading = true, lastError = null) }
         viewModelScope.launch {
-            when (val res = repo.ask(current.messages)) {
-                is ApiResult.Success -> {
-                    val reply = ChatMessage.assistant(res.content)
-                    val withReply = current.messages + reply
-                    _ui.update { it.copy(messages = withReply, isLoading = false) }
-                    persist(withReply)
+            ensureSession()
+            if (_ui.value.streamEnabled) {
+                val replyId = "a-retry-${System.currentTimeMillis()}"
+                _ui.update { it.copy(messages = it.messages + ChatMessage.assistant("", 0).copy(id = replyId), isStreaming = true) }
+                val sb = StringBuilder()
+                repo.askStream(current.messages, sessionId).collect { delta ->
+                    sb.append(delta)
+                    _ui.update { st ->
+                        st.copy(messages = st.messages.map {
+                            if (it.id == replyId) it.copy(content = sb.toString(), timestamp = System.currentTimeMillis())
+                            else it
+                        })
+                    }
                 }
-                is ApiResult.Error -> {
-                    _ui.update { it.copy(isLoading = false, lastError = res.message) }
+                val finalText = sb.toString()
+                val finalMsg = ChatMessage.assistant(finalText)
+                _ui.update { it.copy(
+                    messages = it.messages.map { m -> if (m.id == replyId) finalMsg else m },
+                    isStreaming = false, isLoading = false,
+                ) }
+                persist(_ui.value.messages)
+            } else {
+                when (val res = repo.ask(current.messages, sessionId)) {
+                    is ApiResult.Success -> {
+                        val reply = ChatMessage.assistant(res.content)
+                        val withReply = _ui.value.messages + reply
+                        _ui.update { it.copy(messages = withReply, isLoading = false) }
+                        persist(withReply)
+                    }
+                    is ApiResult.Error -> _ui.update { it.copy(isLoading = false, lastError = res.message) }
                 }
             }
         }
+    }
+
+    /** Лениво создаёт серверную сессию при первом запросе (фича 4). */
+    private suspend fun ensureSession() {
+        if (sessionId != null || sessionInitStarted) return
+        sessionInitStarted = true
+        sessionId = repo.createSession()
     }
 
     private fun persist(messages: List<ChatMessage>) {

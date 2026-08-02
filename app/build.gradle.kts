@@ -23,8 +23,8 @@ android {
         applicationId = "com.helper.app"
         minSdk = 23
         targetSdk = 35
-        versionCode = 10501
-        versionName = "1.5.1"
+        versionCode = 20000
+        versionName = "2.0.0"
 
         buildConfigField("String", "DEEPSEEK_API_KEY", "\"$deepseekKey\"")
         buildConfigField("String", "DEEPSEEK_BASE_URL", "\"$deepseekUrl\"")
@@ -57,4 +57,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.kotlinx.coroutines.android)
+    // Фича 2: геолокация
+    implementation(libs.google.play.services.location)
+    implementation(libs.kotlinx.coroutines.play.services)
 }
