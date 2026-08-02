@@ -19,3 +19,8 @@ keystore.properties
 
 # Kotlin
 .kotlin/
+
+# ZCode / локальные инструменты (рабочее состояние агента, не код)
+.zcode/
+.agents/
+system-commandline-sentinel-files/
