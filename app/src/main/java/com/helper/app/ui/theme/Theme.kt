@@ -1,33 +1,34 @@
 package com.helper.app.ui.theme
 
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 
+// Фирменная палитра «Sasha Violet» (Google Stitch, дизайн-система Helper).
 private val DarkColors = darkColorScheme(
-    primary = Violet80,
-    onPrimary = Color(0xFF000000),
-    primaryContainer = Violet40,
+    primary = Violet40,
+    onPrimary = Color(0xFFFFFFFF),
+    primaryContainer = BubbleUser,
     onPrimaryContainer = Violet90,
-    secondary = Teal80,
+    secondary = Teal40,
+    onSecondary = Color(0xFF00201A),
+    secondaryContainer = Color(0xFF004D42),
+    onSecondaryContainer = Teal80,
     background = DarkBackground,
-    onBackground = Color(0xFFF5F2FA),
+    onBackground = Color(0xFFE6E1F5),
     surface = DarkSurface,
-    onSurface = Color(0xFFF5F2FA),
+    onSurface = Color(0xFFE6E1F5),
     surfaceVariant = DarkSurfaceVariant,
-    onSurfaceVariant = Color(0xFFB8B2C4),
+    onSurfaceVariant = Color(0xFFB8B2CC),
+    outline = Color(0xFF8A849E),
 )
 
 private val LightColors = lightColorScheme(
     primary = Violet40,
-    onPrimary = Color(0xFFF5F2FA),
+    onPrimary = Color(0xFFFFFFFF),
     primaryContainer = Violet90,
     onPrimaryContainer = Color(0xFF1A1721),
     secondary = Teal40,
@@ -39,22 +40,17 @@ private val LightColors = lightColorScheme(
     onSurfaceVariant = Color(0xFF4A4554),
 )
 
-/** Тема приложения. На Android 12+ подхватывает Dynamic Color, иначе — брендинг Саши. */
+/**
+ * Тема Helper. Фирменная палитра «Sasha Violet» всегда (без Dynamic Color),
+ * чтобы приложение совпадало с дизайном Google Stitch.
+ */
 @Composable
 fun HelperTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
-    val scheme = when {
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val ctx = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
-        }
-        darkTheme -> DarkColors
-        else -> LightColors
-    }
     MaterialTheme(
-        colorScheme = scheme,
+        colorScheme = if (darkTheme) DarkColors else LightColors,
         typography = HelperTypography,
         content = content,
     )
