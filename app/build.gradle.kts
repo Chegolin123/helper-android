@@ -14,6 +14,8 @@ val localProps = Properties().apply {
 val deepseekKey: String = localProps.getProperty("DEEPSEEK_API_KEY", "")
 val deepseekUrl: String = localProps.getProperty("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
 val deepseekModel: String = localProps.getProperty("DEEPSEEK_MODEL", "deepseek-v4-flash")
+val zcodeToken: String = localProps.getProperty("ZCODE_TOKEN", "")
+val zcodeBaseUrl: String = localProps.getProperty("ZCODE_BASE_URL", "")
 
 android {
     namespace = "com.helper.app"
@@ -29,6 +31,8 @@ android {
         buildConfigField("String", "DEEPSEEK_API_KEY", "\"$deepseekKey\"")
         buildConfigField("String", "DEEPSEEK_BASE_URL", "\"$deepseekUrl\"")
         buildConfigField("String", "DEEPSEEK_MODEL", "\"$deepseekModel\"")
+        buildConfigField("String", "ZCODE_TOKEN", "\"$zcodeToken\"")
+        buildConfigField("String", "ZCODE_BASE_URL", "\"$zcodeBaseUrl\"")
     }
 
     buildFeatures {
@@ -60,4 +64,8 @@ dependencies {
     // Фича 2: геолокация
     implementation(libs.google.play.services.location)
     implementation(libs.kotlinx.coroutines.play.services)
+    // Харнесс: шифрованное хранение токена ZCode
+    implementation(libs.androidx.security.crypto)
+    // Харнесс: HTTP-клиент с кастомным DNS (IPv4-first для funnel-моста)
+    implementation(libs.okhttp)
 }

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Харнесс: мост ZCode доступен по http (nginx VPS), Саша тоже ходит по http.
+     Разрешаем cleartext глобально (как и было через usesCleartextTraffic). -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
