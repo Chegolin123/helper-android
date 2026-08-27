@@ -354,6 +354,8 @@ private fun TokenSetup(onSave: (String) -> Unit) {
             onValueChange = { token = it },
             label = { Text("Токен") },
             singleLine = true,
+            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Password),
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.padding(8.dp))
