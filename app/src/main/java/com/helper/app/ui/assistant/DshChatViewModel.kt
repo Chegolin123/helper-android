@@ -9,7 +9,6 @@ import com.helper.app.data.dsh.DshEvent
 import com.helper.app.data.dsh.DshStore
 import com.helper.app.data.model.ChatMessage
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,8 +29,8 @@ data class DshUiState(
 )
 
 /**
- * Нативный чат с DSH: сессия живёт на сервере, приложение показывает
- * историю и поток текста, не открывая веб-интерфейс.
+ * Нативный чат с DSH. Текст ответа добавляется сразу по мере прихода
+ * text-delta с сервера, без искусственной задержки.
  */
 class DshChatViewModel(
     private val store: DshStore,
@@ -49,10 +48,6 @@ class DshChatViewModel(
     private var sessionId: String? = store.sessionId
     private var streamJob: Job? = null
     private var currentAssistantId: String? = null
-    private var streamTarget = StringBuilder()
-    private var visibleChars = 0
-    private var typewriterJob: Job? = null
-    private var pendingTurn: DshEvent.TurnEnd? = null
 
     init {
         if (!store.token.isNullOrBlank()) {
@@ -95,7 +90,6 @@ class DshChatViewModel(
     fun send() {
         val text = _ui.value.input.trim()
         if (text.isEmpty() || _ui.value.isStreaming || _ui.value.needsLogin) return
-        resetTypewriter()
         val now = System.currentTimeMillis()
         val assistantId = "a-${UUID.randomUUID()}"
         currentAssistantId = assistantId
@@ -120,7 +114,7 @@ class DshChatViewModel(
             } catch (error: DshAuthException) {
                 handleAuth(error.message ?: "Сессия истекла")
             } catch (error: Exception) {
-                abortTyping(error.message ?: "Не удалось отправить")
+                failStream(error.message ?: "Не удалось отправить")
             }
         }
     }
@@ -128,7 +122,6 @@ class DshChatViewModel(
     fun clearChat() {
         streamJob?.cancel()
         streamJob = null
-        resetTypewriter()
         currentAssistantId = null
         sessionId = null
         store.sessionId = null
@@ -149,7 +142,6 @@ class DshChatViewModel(
     fun logout() {
         streamJob?.cancel()
         streamJob = null
-        resetTypewriter()
         currentAssistantId = null
         sessionId = null
         api.updateToken(null)
@@ -193,7 +185,6 @@ class DshChatViewModel(
         when (event) {
             DshEvent.Opened -> _ui.update { it.copy(error = null) }
             is DshEvent.Snapshot -> {
-                resetTypewriter()
                 currentAssistantId = null
                 val history = DshApi.parseHistory(event.records)
                 if (history.isNotEmpty()) {
@@ -203,7 +194,7 @@ class DshChatViewModel(
             }
             is DshEvent.TextDelta -> appendDelta(event.text)
             is DshEvent.AssistantFinal -> finishAssistant(event.text)
-            is DshEvent.TurnEnd -> onTurnEnd(event)
+            is DshEvent.TurnEnd -> completeTurn(event)
             is DshEvent.Title -> _ui.update { it.copy(title = event.title) }
             is DshEvent.Status -> _ui.update { it.copy(status = event.text) }
             is DshEvent.Error -> {
@@ -211,12 +202,12 @@ class DshChatViewModel(
                 if (message.contains("401") || message.contains("auth", true) || message.contains("Сессия")) {
                     handleAuth(message)
                 } else {
-                    abortTyping(message)
+                    failStream(message)
                 }
             }
             DshEvent.Closed -> {
                 if (_ui.value.isStreaming) {
-                    abortTyping("Соединение с DSH закрыто")
+                    failStream("Соединение с DSH закрыто")
                 }
             }
         }
@@ -224,18 +215,33 @@ class DshChatViewModel(
 
     private fun appendDelta(delta: String) {
         if (delta.isEmpty()) return
-        ensureAssistantBubble()
-        streamTarget.append(delta)
-        ensureTypewriter()
+        val id = ensureAssistantBubble()
+        _ui.update { state ->
+            state.copy(
+                messages = state.messages.map {
+                    if (it.id == id) {
+                        it.copy(
+                            content = it.content + delta,
+                            timestamp = System.currentTimeMillis(),
+                        )
+                    } else it
+                },
+                isStreaming = true,
+            )
+        }
     }
 
     private fun finishAssistant(text: String) {
         if (text.isBlank()) return
-        ensureAssistantBubble()
-        streamTarget = StringBuilder(text)
-        visibleChars = minOf(visibleChars, text.length)
-        updateAssistantContent(streamTarget.substring(0, visibleChars))
-        ensureTypewriter()
+        val id = ensureAssistantBubble()
+        _ui.update { state ->
+            state.copy(
+                messages = state.messages.map {
+                    if (it.id == id) it.copy(content = text, timestamp = System.currentTimeMillis())
+                    else it
+                },
+            )
+        }
     }
 
     private fun ensureAssistantBubble(): String {
@@ -257,58 +263,6 @@ class DshChatViewModel(
         return id
     }
 
-    private fun ensureTypewriter() {
-        if (typewriterJob?.isActive == true) return
-        if (visibleChars >= streamTarget.length) {
-            pendingTurn?.let { turn ->
-                pendingTurn = null
-                completeTurn(turn)
-            }
-            return
-        }
-        typewriterJob = viewModelScope.launch {
-            try {
-                while (visibleChars < streamTarget.length) {
-                    visibleChars = minOf(streamTarget.length, visibleChars + 2)
-                    updateAssistantContent(streamTarget.substring(0, visibleChars))
-                    delay(16)
-                }
-            } finally {
-                typewriterJob = null
-            }
-            if (visibleChars < streamTarget.length) {
-                ensureTypewriter()
-            } else {
-                pendingTurn?.let { turn ->
-                    pendingTurn = null
-                    completeTurn(turn)
-                }
-            }
-        }
-    }
-
-    private fun updateAssistantContent(text: String) {
-        val id = currentAssistantId ?: ensureAssistantBubble()
-        _ui.update { state ->
-            state.copy(
-                messages = state.messages.map {
-                    if (it.id == id) {
-                        it.copy(content = text, timestamp = System.currentTimeMillis())
-                    } else it
-                },
-            )
-        }
-    }
-
-    private fun onTurnEnd(event: DshEvent.TurnEnd) {
-        if (typewriterJob?.isActive == true) {
-            pendingTurn = event
-            _ui.update { it.copy(status = null) }
-        } else {
-            completeTurn(event)
-        }
-    }
-
     private fun completeTurn(event: DshEvent.TurnEnd) {
         _ui.update {
             it.copy(
@@ -319,44 +273,26 @@ class DshChatViewModel(
         }
         store.saveMessages(_ui.value.messages)
         currentAssistantId = null
-        streamTarget = StringBuilder()
-        visibleChars = 0
     }
 
-    private fun abortTyping(message: String) {
-        typewriterJob?.cancel()
-        typewriterJob = null
+    private fun failStream(message: String) {
         val id = currentAssistantId
-        val full = streamTarget.toString()
-        if (full.isBlank()) {
-            if (id != null) {
+        if (id != null) {
+            val bubble = _ui.value.messages.firstOrNull { it.id == id }
+            if (bubble?.content.isNullOrBlank()) {
                 _ui.update { state ->
                     state.copy(messages = state.messages.filterNot { it.id == id })
                 }
             }
-        } else {
-            updateAssistantContent(full)
         }
         _ui.update { it.copy(isStreaming = false, status = null, error = message) }
         store.saveMessages(_ui.value.messages)
         currentAssistantId = null
-        streamTarget = StringBuilder()
-        visibleChars = 0
-        pendingTurn = null
-    }
-
-    private fun resetTypewriter() {
-        typewriterJob?.cancel()
-        typewriterJob = null
-        streamTarget = StringBuilder()
-        visibleChars = 0
-        pendingTurn = null
     }
 
     private fun handleAuth(message: String) {
         streamJob?.cancel()
         streamJob = null
-        resetTypewriter()
         api.updateToken(null)
         store.clearToken()
         val friendly = if (message.contains("401") || message.contains("101")) {
@@ -377,7 +313,6 @@ class DshChatViewModel(
 
     override fun onCleared() {
         streamJob?.cancel()
-        typewriterJob?.cancel()
         super.onCleared()
     }
 

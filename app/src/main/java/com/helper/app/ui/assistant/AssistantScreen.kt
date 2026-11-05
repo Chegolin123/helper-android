@@ -1,5 +1,6 @@
 package com.helper.app.ui.assistant
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -280,7 +281,9 @@ private fun MessageRow(message: ChatMessage, streaming: Boolean) {
             color = if (isUser) MaterialTheme.colorScheme.primary
             else MaterialTheme.colorScheme.surfaceVariant,
             shape = RoundedCornerShape(18.dp),
-            modifier = Modifier.widthIn(max = 300.dp),
+            modifier = Modifier
+                .widthIn(max = 300.dp)
+                .animateContentSize(),
         ) {
             if (isUser) {
                 Text(
