@@ -25,8 +25,8 @@ android {
         applicationId = "com.helper.app"
         minSdk = 23
         targetSdk = 35
-        versionCode = 20200
-        versionName = "2.2.0"
+        versionCode = 20300
+        versionName = "2.3.0"
 
         buildConfigField("String", "DEEPSEEK_API_KEY", "\"$deepseekKey\"")
         buildConfigField("String", "DEEPSEEK_BASE_URL", "\"$deepseekUrl\"")
