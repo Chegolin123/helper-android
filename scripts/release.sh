@@ -40,8 +40,9 @@ perl -0pi -e "s/versionCode = \\d+/versionCode = $CODE/" "$GRADLE"
 perl -0pi -e "s/versionName = \"[^\"]+\"/versionName = \"$VERSION\"/" "$GRADLE"
 echo "✓ versionName=$VERSION versionCode=$CODE"
 
-# 2-3. Коммит + тег + push.
-git add "$GRADLE"
+# 2-3. Коммит + тег + push. add -A: в релиз входит не только бамп версии,
+# но и все изменения приложения (новая вкладка, удалённые файлы, ресурсы).
+git add -A
 git commit -m "🔖 Release v$VERSION" || echo "(ничего коммитить — уже актуально)"
 git tag "v$VERSION"
 git push origin main
@@ -66,7 +67,8 @@ REPO="helper-android"
 echo "==> Создание Release v$VERSION..."
 # JSON через файл (относительный путь — надёжнее на Windows с Git Bash).
 RELEASE_PAYLOAD=".release_payload.json"
-python -c "import json,os; os.chdir(os.environ.get('PWD','.')); open('.release_payload.json','w',encoding='utf-8').write(json.dumps({'tag_name':'v$VERSION','name':'Helper v$VERSION','body':'Релиз v$VERSION. Обновление доступно из приложения.','prerelease':False}, ensure_ascii=False))"
+BODY="${RELEASE_BODY:-Релиз v$VERSION. Обновление доступно из приложения.}"
+python -c "import json,sys; open('.release_payload.json','w',encoding='utf-8').write(json.dumps({'tag_name':'v$VERSION','name':'Helper v$VERSION','body':sys.argv[1],'prerelease':False}, ensure_ascii=False))" "$BODY"
 RELEASE_RESP=$(curl -s -X POST -H "Authorization: token $TOKEN" -H "Content-Type: application/json" \
   --data-binary @"$RELEASE_PAYLOAD" \
   "https://api.github.com/repos/$OWNER/$REPO/releases")

@@ -63,8 +63,6 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.helper.app.data.location.LocationProvider
-import com.helper.app.data.update.UpdateCheckResult
-import com.helper.app.data.update.UpdateChecker
 import com.helper.app.scheduling.DailySummaryScheduler
 import com.helper.app.ui.chat.components.DayDivider
 import com.helper.app.ui.chat.components.EmptyState
@@ -90,17 +88,6 @@ fun ChatScreen() {
     val snackbar = remember { SnackbarHostState() }
     var showClearDialog by remember { mutableStateOf(false) }
     var showReminderDialog by remember { mutableStateOf(false) }
-
-    // Проверка обновления при старте (один раз).
-    val updateChecker = remember { UpdateChecker() }
-    var update by remember { mutableStateOf<UpdateCheckResult?>(null) }
-    var updateRequested by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        if (!updateRequested) {
-            updateRequested = true
-            update = updateChecker.check()
-        }
-    }
 
     // Фича 5: голосовой ввод (STT). Требует RECORD_AUDIO.
     val scope = rememberCoroutineScope()
@@ -291,15 +278,6 @@ fun ChatScreen() {
             dismissButton = {
                 TextButton(onClick = { showClearDialog = false }) { Text("Отмена") }
             },
-        )
-    }
-
-    // Диалог самообновления, если нашли свежий релиз.
-    val available = update as? UpdateCheckResult.Available
-    if (available != null) {
-        UpdateDialog(
-            state = available,
-            onDismiss = { update = null },
         )
     }
 
