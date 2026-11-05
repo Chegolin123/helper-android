@@ -9,6 +9,7 @@ import com.helper.app.data.dsh.DshEvent
 import com.helper.app.data.dsh.DshStore
 import com.helper.app.data.model.ChatMessage
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -48,6 +49,10 @@ class DshChatViewModel(
     private var sessionId: String? = store.sessionId
     private var streamJob: Job? = null
     private var currentAssistantId: String? = null
+    private var streamTarget = StringBuilder()
+    private var visibleChars = 0
+    private var typewriterJob: Job? = null
+    private var pendingTurn: DshEvent.TurnEnd? = null
 
     init {
         if (!store.token.isNullOrBlank()) {
@@ -90,6 +95,7 @@ class DshChatViewModel(
     fun send() {
         val text = _ui.value.input.trim()
         if (text.isEmpty() || _ui.value.isStreaming || _ui.value.needsLogin) return
+        resetTypewriter()
         val now = System.currentTimeMillis()
         val assistantId = "a-${UUID.randomUUID()}"
         currentAssistantId = assistantId
@@ -114,13 +120,7 @@ class DshChatViewModel(
             } catch (error: DshAuthException) {
                 handleAuth(error.message ?: "Сессия истекла")
             } catch (error: Exception) {
-                _ui.update {
-                    it.copy(
-                        isStreaming = false,
-                        status = null,
-                        error = error.message ?: "Не удалось отправить",
-                    )
-                }
+                abortTyping(error.message ?: "Не удалось отправить")
             }
         }
     }
@@ -128,6 +128,7 @@ class DshChatViewModel(
     fun clearChat() {
         streamJob?.cancel()
         streamJob = null
+        resetTypewriter()
         currentAssistantId = null
         sessionId = null
         store.sessionId = null
@@ -148,6 +149,7 @@ class DshChatViewModel(
     fun logout() {
         streamJob?.cancel()
         streamJob = null
+        resetTypewriter()
         currentAssistantId = null
         sessionId = null
         api.updateToken(null)
@@ -191,6 +193,8 @@ class DshChatViewModel(
         when (event) {
             DshEvent.Opened -> _ui.update { it.copy(error = null) }
             is DshEvent.Snapshot -> {
+                resetTypewriter()
+                currentAssistantId = null
                 val history = DshApi.parseHistory(event.records)
                 if (history.isNotEmpty()) {
                     _ui.update { it.copy(messages = history) }
@@ -199,15 +203,7 @@ class DshChatViewModel(
             }
             is DshEvent.TextDelta -> appendDelta(event.text)
             is DshEvent.AssistantFinal -> finishAssistant(event.text)
-            is DshEvent.TurnEnd -> {
-                _ui.update {
-                    it.copy(
-                        isStreaming = false,
-                        status = null,
-                        error = if (event.completed) it.error else (event.error ?: "Ход завершился ошибкой"),
-                    )
-                }
-            }
+            is DshEvent.TurnEnd -> onTurnEnd(event)
             is DshEvent.Title -> _ui.update { it.copy(title = event.title) }
             is DshEvent.Status -> _ui.update { it.copy(status = event.text) }
             is DshEvent.Error -> {
@@ -215,81 +211,164 @@ class DshChatViewModel(
                 if (message.contains("401") || message.contains("auth", true) || message.contains("Сессия")) {
                     handleAuth(message)
                 } else {
-                    _ui.update {
-                        it.copy(isStreaming = false, status = null, error = message)
-                    }
+                    abortTyping(message)
                 }
             }
-            DshEvent.Closed -> _ui.update {
-                if (it.isStreaming) {
-                    it.copy(
-                        isStreaming = false,
-                        status = null,
-                        error = "Соединение с DSH закрыто",
-                    )
-                } else it
+            DshEvent.Closed -> {
+                if (_ui.value.isStreaming) {
+                    abortTyping("Соединение с DSH закрыто")
+                }
             }
         }
     }
 
     private fun appendDelta(delta: String) {
         if (delta.isEmpty()) return
-        val id = currentAssistantId ?: "a-${UUID.randomUUID()}".also { currentAssistantId = it }
-        _ui.update { state ->
-            val hasBubble = state.messages.any { it.id == id }
-            val messages = if (hasBubble) {
-                state.messages.map {
-                    if (it.id == id) {
-                        it.copy(
-                            content = it.content + delta,
-                            timestamp = System.currentTimeMillis(),
-                        )
-                    } else it
-                }
-            } else {
-                state.messages + ChatMessage(
-                    id = id,
-                    role = ChatMessage.ROLE_ASSISTANT,
-                    content = delta,
-                    timestamp = System.currentTimeMillis(),
-                )
-            }
-            state.copy(messages = messages, isStreaming = true)
-        }
+        ensureAssistantBubble()
+        streamTarget.append(delta)
+        ensureTypewriter()
     }
 
     private fun finishAssistant(text: String) {
         if (text.isBlank()) return
-        val id = currentAssistantId
+        ensureAssistantBubble()
+        streamTarget = StringBuilder(text)
+        visibleChars = minOf(visibleChars, text.length)
+        updateAssistantContent(streamTarget.substring(0, visibleChars))
+        ensureTypewriter()
+    }
+
+    private fun ensureAssistantBubble(): String {
+        val existing = currentAssistantId
+        if (existing != null && _ui.value.messages.any { it.id == existing }) return existing
+        val id = existing ?: "a-${UUID.randomUUID()}"
+        currentAssistantId = id
         _ui.update { state ->
-            val messages = if (id != null && state.messages.any { it.id == id }) {
-                state.messages.map {
-                    if (it.id == id) it.copy(content = text, timestamp = System.currentTimeMillis())
-                    else it
-                }
-            } else {
-                state.messages + ChatMessage(
-                    id = "a-${UUID.randomUUID()}",
+            if (state.messages.any { it.id == id }) state
+            else state.copy(
+                messages = state.messages + ChatMessage(
+                    id = id,
                     role = ChatMessage.ROLE_ASSISTANT,
-                    content = text,
+                    content = "",
                     timestamp = System.currentTimeMillis(),
-                )
+                ),
+            )
+        }
+        return id
+    }
+
+    private fun ensureTypewriter() {
+        if (typewriterJob?.isActive == true) return
+        if (visibleChars >= streamTarget.length) {
+            pendingTurn?.let { turn ->
+                pendingTurn = null
+                completeTurn(turn)
             }
-            state.copy(messages = messages)
+            return
+        }
+        typewriterJob = viewModelScope.launch {
+            try {
+                while (visibleChars < streamTarget.length) {
+                    visibleChars = minOf(streamTarget.length, visibleChars + 2)
+                    updateAssistantContent(streamTarget.substring(0, visibleChars))
+                    delay(16)
+                }
+            } finally {
+                typewriterJob = null
+            }
+            if (visibleChars < streamTarget.length) {
+                ensureTypewriter()
+            } else {
+                pendingTurn?.let { turn ->
+                    pendingTurn = null
+                    completeTurn(turn)
+                }
+            }
+        }
+    }
+
+    private fun updateAssistantContent(text: String) {
+        val id = currentAssistantId ?: ensureAssistantBubble()
+        _ui.update { state ->
+            state.copy(
+                messages = state.messages.map {
+                    if (it.id == id) {
+                        it.copy(content = text, timestamp = System.currentTimeMillis())
+                    } else it
+                },
+            )
+        }
+    }
+
+    private fun onTurnEnd(event: DshEvent.TurnEnd) {
+        if (typewriterJob?.isActive == true) {
+            pendingTurn = event
+            _ui.update { it.copy(status = null) }
+        } else {
+            completeTurn(event)
+        }
+    }
+
+    private fun completeTurn(event: DshEvent.TurnEnd) {
+        _ui.update {
+            it.copy(
+                isStreaming = false,
+                status = null,
+                error = if (event.completed) it.error else (event.error ?: "Ход завершился ошибкой"),
+            )
         }
         store.saveMessages(_ui.value.messages)
+        currentAssistantId = null
+        streamTarget = StringBuilder()
+        visibleChars = 0
+    }
+
+    private fun abortTyping(message: String) {
+        typewriterJob?.cancel()
+        typewriterJob = null
+        val id = currentAssistantId
+        val full = streamTarget.toString()
+        if (full.isBlank()) {
+            if (id != null) {
+                _ui.update { state ->
+                    state.copy(messages = state.messages.filterNot { it.id == id })
+                }
+            }
+        } else {
+            updateAssistantContent(full)
+        }
+        _ui.update { it.copy(isStreaming = false, status = null, error = message) }
+        store.saveMessages(_ui.value.messages)
+        currentAssistantId = null
+        streamTarget = StringBuilder()
+        visibleChars = 0
+        pendingTurn = null
+    }
+
+    private fun resetTypewriter() {
+        typewriterJob?.cancel()
+        typewriterJob = null
+        streamTarget = StringBuilder()
+        visibleChars = 0
+        pendingTurn = null
     }
 
     private fun handleAuth(message: String) {
         streamJob?.cancel()
         streamJob = null
+        resetTypewriter()
         api.updateToken(null)
         store.clearToken()
+        val friendly = if (message.contains("401") || message.contains("101")) {
+            "Сессия истекла — войди заново"
+        } else {
+            message
+        }
         _ui.update {
             it.copy(
                 needsLogin = true,
                 loginLoading = false,
-                loginError = message,
+                loginError = friendly,
                 isStreaming = false,
                 status = null,
             )
@@ -298,6 +377,7 @@ class DshChatViewModel(
 
     override fun onCleared() {
         streamJob?.cancel()
+        typewriterJob?.cancel()
         super.onCleared()
     }
 

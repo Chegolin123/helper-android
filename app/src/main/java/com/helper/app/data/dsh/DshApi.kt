@@ -187,7 +187,11 @@ class DshApi(
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                trySend(DshEvent.Error(t.message ?: "Соединение с DSH потеряно"))
+                val message = when {
+                    response?.code == 401 -> "Сессия истекла — войди заново"
+                    else -> t.message ?: "Соединение с DSH потеряно"
+                }
+                trySend(DshEvent.Error(message))
                 close()
             }
 
