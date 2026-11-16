@@ -1,10 +1,14 @@
 
-## Харнесс: вкладка «ZCode»
+## ╨е╨░╤А╨╜╨╡╤Б╤Б: ╨▓╨║╨╗╨░╨┤╨║╨░ ┬лZCode┬╗
 
-Мобильный пульт к headless-агенту (ZCode Protocol через мост на сервере):
+╨Ь╨╛╨▒╨╕╨╗╤М╨╜╤Л╨╣ ╨┐╤Г╨╗╤М╤В ╨║ headless-╨░╨│╨╡╨╜╤В╤Г (ZCode Protocol ╤З╨╡╤А╨╡╨╖ ╨╝╨╛╤Б╤В ╨╜╨░ ╤Б╨╡╤А╨▓╨╡╤А╨╡):
 
-- Вкладка **«ZCode»** рядом с чатом Саши: выбор проекта → задача → стриминг шагов агента → кнопка «Стоп»
-- Серверный канал: `http://144.31.207.192/harness/` (nginx VPS) → ssh-туннель → `zcode-bridge` на Коренёво → `zcode.cjs app-server`
-- Токен моста: экран настройки (шифрованное хранилище), в debug-сборке — `ZCODE_TOKEN` из `local.properties`
-- Клиент: OkHttp (IPv4-first DNS, HTTP/1.1, CLEARTEXT+TLS1.2 connectionSpecs)
-- Подробности: `harness/HARNESS-SPEC.md` в репозитории sasha-assistant
+- ╨Т╨║╨╗╨░╨┤╨║╨░ **┬лZCode┬╗** ╤А╤П╨┤╨╛╨╝ ╤Б ╤З╨░╤В╨╛╨╝ ╨б╨░╤И╨╕: ╨▓╤Л╨▒╨╛╤А ╨┐╤А╨╛╨╡╨║╤В╨░ тЖТ ╨╖╨░╨┤╨░╤З╨░ тЖТ ╤Б╤В╤А╨╕╨╝╨╕╨╜╨│ ╤И╨░╨│╨╛╨▓ ╨░╨│╨╡╨╜╤В╨░ тЖТ ╨║╨╜╨╛╨┐╨║╨░ ┬л╨б╤В╨╛╨┐┬╗
+- ╨б╨╡╤А╨▓╨╡╤А╨╜╤Л╨╣ ╨║╨░╨╜╨░╨╗: `http://144.31.207.192/harness/` (nginx VPS) тЖТ ssh-╤В╤Г╨╜╨╜╨╡╨╗╤М тЖТ `zcode-bridge` ╨╜╨░ ╨Ъ╨╛╤А╨╡╨╜╤С╨▓╨╛ тЖТ `zcode.cjs app-server`
+- ╨в╨╛╨║╨╡╨╜ ╨╝╨╛╤Б╤В╨░: ╤Н╨║╤А╨░╨╜ ╨╜╨░╤Б╤В╤А╨╛╨╣╨║╨╕ (╤И╨╕╤Д╤А╨╛╨▓╨░╨╜╨╜╨╛╨╡ ╤Е╤А╨░╨╜╨╕╨╗╨╕╤Й╨╡), ╨▓ debug-╤Б╨▒╨╛╤А╨║╨╡ тАФ `ZCODE_TOKEN` ╨╕╨╖ `local.properties`
+- ╨Ъ╨╗╨╕╨╡╨╜╤В: OkHttp (IPv4-first DNS, HTTP/1.1, CLEARTEXT+TLS1.2 connectionSpecs)
+- ╨Я╨╛╨┤╤А╨╛╨▒╨╜╨╛╤Б╤В╨╕: `harness/HARNESS-SPEC.md` ╨▓ ╤А╨╡╨┐╨╛╨╖╨╕╤В╨╛╤А╨╕╨╕ sasha-assistant
+
+## Связанные проекты
+
+- [sasha-assistant](https://github.com/Chegolin123/sasha-assistant) — серверная часть: HTTP-API, TG-бот, vault.
